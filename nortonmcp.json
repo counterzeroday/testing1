@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+      "Notion": {
+      "url": "https://mcp.notion.com/mcp",
+      "headers": {}
+    },
+    "wikipedia": {
+      "command": "wikipedia-mcp"
+    },
+    "postman_mcp_server": {
+      "url": "https://mcp.postman.com/minimal",
+      "headers": {
+        "Authorization": "Bearer mykey"
+      }
+    }
+  }
+}
