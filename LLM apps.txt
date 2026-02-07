@@ -1,3 +1,4 @@
+2/6/2026
 Are LLM apps, RAG apps, AI Agent considered GenAI apps? I need to understand the relationship among them
 
 Yes, **LLM apps**, **RAG apps**, and **AI Agents** are generally considered **Generative AI (GenAI) apps**, but they are different in scope and complexity. Let’s break it down and understand their relationships:
