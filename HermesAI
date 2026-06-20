@@ -1,0 +1,87 @@
+Here's a comprehensive breakdown of Hermes AI Agent's security guardrails and implementation requirements:
+
+---
+
+## Hermes AI Agent — Security Guardrails & Requirements
+
+### 1. Defense-in-Depth Model (7 Layers)
+
+The security model has seven layers:
+
+1. **User authorization** — who can talk to the agent (allowlists, DM pairing)
+2. **Dangerous command approval** — human-in-the-loop for destructive operations
+3. **Container isolation** — Docker/Singularity/Modal sandboxing with hardened settings
+4. **MCP credential filtering** — environment variable isolation for MCP subprocesses
+5. **Context file scanning** — prompt injection detection in project files
+6. **Cross-session isolation** — sessions cannot access each other's data or state; cron job storage paths are hardened against path traversal attacks
+7. **Input sanitization** — working directory parameters in terminal tool backends are validated against an allowlist to prevent shell injection
+
+---
+
+### 2. Dangerous Command Approval
+
+Before executing any command, Hermes checks it against a curated list of dangerous patterns. If a match is found, the user must explicitly approve it.
+
+There are three configurable approval modes:
+
+| Mode | Behavior |
+|------|----------|
+| **manual** (default) | Always prompts the user for approval on dangerous commands |
+| **smart** | Uses an auxiliary LLM to assess risk — low-risk commands auto-approved, genuinely dangerous ones auto-denied, uncertain cases escalate |
+| **off** | Disables all approval checks (use only in trusted/isolated environments) |
+
+The `cron_mode` key controls how cron jobs behave headlessly when they trigger a dangerous-command prompt. `deny` blocks the command; `approve` auto-approves everything in cron context.
+
+---
+
+### 3. YOLO Mode (Override — Use with Caution)
+
+YOLO mode bypasses **all** dangerous command approval prompts for the current session. It can be activated via CLI flag (`hermes --yolo`), slash command (`/yolo` to toggle), or environment variable (`HERMES_YOLO_MODE=1`). This should only be used in fully isolated/trusted environments.
+
+---
+
+### 4. Container Isolation
+
+The Docker backend provides hardened container execution with a read-only root filesystem (configurable), all Linux capabilities dropped to remove dangerous kernel access, namespace isolation for process and network separation, PID limits to prevent fork bombs, and no privilege escalation.
+
+When running in Docker, Singularity, Modal, or Daytona backends, dangerous command checks are skipped because the container itself is the security boundary.
+
+---
+
+### 5. Tirith Content-Level Scanning
+
+Hermes integrates Tirith for content-level command scanning before execution. Tirith detects threats that pattern matching alone misses, including homograph URL spoofing (internationalized domain attacks) and pipe-to-interpreter patterns (e.g., `curl | bash`, `wget | sh`). Tirith auto-installs from GitHub releases on first use with SHA-256 checksum verification, and cosign provenance verification if cosign is available.
+
+---
+
+### 6. Network Trust Boundaries
+
+Web tools, the browser, vision URL fetches, and gateway media downloads no longer reject RFC 1918 / loopback / link-local / CGNAT / cloud-metadata destinations when the internal network access setting is enabled. This is a deliberate trust boundary — only enable it on machines where the agent running arbitrary prompt-injected URLs against the local network is an acceptable risk. Public-facing gateways should leave it off.
+
+---
+
+### 7. Supply Chain Security
+
+Hermes ships with a built-in advisory scanner that flags Python packages in the active venv that match a curated catalog of known-compromised versions (such as the May 2026 mistralai 2.4.6 poisoning). A one-line warning is printed at CLI startup if any advisory matches, with a pointer to `hermes doctor` for full remediation.
+
+---
+
+### 8. Credential & Secret Isolation
+
+The SSH connection details live in `.env` (not `config.yaml`) so they aren't checked in or shared along with profile exports. This keeps the gateway's messaging connections separate from the agent's command execution.
+
+---
+
+### 9. Audit Logging (via Tirith)
+
+The audit log uses an append-only SQLite table with tamper detection — log entries include a hash chain so deletions or modifications are detectable. Log entries capture: timestamp, session ID, tool name, full parameters, calling user, approval chain (if required), and outcome. Rate limiting and token cost controls integrate with the permission system, so budget guardrails and safety guardrails share the same configuration surface.
+
+---
+
+### 10. Role-Based Permissions (Team Deployments)
+
+In shared Hermes deployments (team Discord, family Telegram), you can configure different permission levels per user. Junior team members can run read-only skills; senior engineers can approve write operations; only admins can run destructive commands.
+
+---
+
+**Key takeaway:** For production use, the recommended posture is `approvals.mode: manual` (or `smart`), Docker-backed container isolation, Tirith scanning enabled, internal network access disabled, and audit logging active. YOLO mode and `approvals.mode: off` should be reserved for trusted CI/CD or fully isolated environments only.
